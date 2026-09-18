@@ -12,6 +12,7 @@ Living status. Update it in the same commit as the work it describes.
 | 4 | Public repo, README, troubleshooting | Done | `75f7062` |
 | 5 | Resilience: self-healing 3-day sync, secret asked at import, sleep diagnostic, partial-sync reporting, generator tests, project docs | Done | `188ecbc` |
 | 6 | Confirm on device why sleep stopped matching, then pin the correct labels | In progress | — |
+| 6a | Record sample counts with every sync so a null value is self-explaining | Done | `a5e770c` |
 
 ## In progress
 
@@ -37,6 +38,13 @@ shortcut's filters. `Sleep Diagnostic` distinguishes the two on the device: if
 it reports zero `Sleep` samples over 14 days, the data is not in Health; if it
 reports samples but zero matches per stage label, the labels changed and need
 pinning in `SLEEP_STAGES`.
+
+The user reports that Apple Health does hold values for the days in question,
+which points away from the watch and towards the query returning nothing at run
+time (a locked phone being the likeliest reason, since Health is unreadable
+then). Every sync now posts `sleep_samples_n` and `heart_rate_samples_n`, so
+from the next run the server itself records which case applies and no further
+round trip through the phone is needed.
 
 Also latent: `sleep_unspecified` has never had a value in 22 days, so the
 `Asleep` label has never matched anything. Harmless while the three staged

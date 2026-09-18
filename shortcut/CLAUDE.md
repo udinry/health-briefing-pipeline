@@ -44,6 +44,10 @@ python3 -m unittest discover -s tests          # 17 structural tests
   at that moment. This is the most likely cause of a morning with no row at all.
 - **Re-importing a shortcut with the same name keeps the old one too.** Delete
   the old one first or iOS will keep running it.
+- **Every run records how many samples Health returned** (`sleep_samples_n`,
+  `heart_rate_samples_n`). Without those, a null value is ambiguous between "no
+  data on the phone" and "the filter matched nothing", and answering that
+  question costs a day of round trips. Keep them.
 - **The action catalogue moved.** On macOS 13 it was
   `WorkflowKit.framework/Resources/WFActions.plist`; on macOS 26 that file is
   gone. Real exported shortcuts are the reliable reference: fetch one with

@@ -115,6 +115,12 @@ class SyncShortcut(unittest.TestCase):
         self.assertEqual([j for _, _, _, j, _ in G.DAILY_METRICS],
                          ["step_count", "active_energy", "resting_heart_rate", "heart_rate_variability"])
 
+    def test_sample_counts_are_sent_with_the_values(self):
+        """A null value plus a count tells "Health had nothing" apart from "the filter missed"."""
+        self.assertEqual([j for _, j in G.DIAG_METRICS],
+                         ["sleep_samples_n", "heart_rate_samples_n"])
+        self.assertEqual(ids(self.doc).count("is.workflow.actions.count"), len(G.DIAG_METRICS))
+
     def test_body_carries_every_metric(self):
         texts = [a["WFWorkflowActionParameters"]["WFTextActionText"]
                  for a in self.doc["WFWorkflowActions"]
@@ -123,7 +129,8 @@ class SyncShortcut(unittest.TestCase):
         body = max((t["Value"]["string"] for t in texts), key=len)
         for name in ("step_count", "active_energy", "resting_heart_rate", "heart_rate_variability",
                      "heart_rate_day_avg", "heart_rate_sleep_avg",
-                     "sleep_deep", "sleep_rem", "sleep_core", "sleep_unspecified"):
+                     "sleep_deep", "sleep_rem", "sleep_core", "sleep_unspecified",
+                     "sleep_samples_n", "heart_rate_samples_n"):
             self.assertIn('"name":"%s"' % name, body)
 
     def test_posts_to_the_configured_url(self):

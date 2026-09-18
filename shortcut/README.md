@@ -33,9 +33,16 @@ numbers as strings:
 | `heart_rate_sleep_avg` | Heart Rate | samples 18:00 → 12:00 next day, Average |
 | `sleep_deep` / `sleep_rem` / `sleep_core` / `sleep_unspecified` | Sleep, filtered by stage | Get Details → Duration, Sum (seconds) |
 | workouts | Workouts | one JSON object each |
+| `sleep_samples_n` / `heart_rate_samples_n` | Sleep, Heart Rate | how many samples Health returned for that window |
 
 A metric with no samples is sent as an empty string and stored as null, which is
 how the briefing can tell "did not sync" from "zero".
+
+The two `_samples_n` counts make a null self-explaining. A null value with a
+count of 0 means Health returned nothing at all: the watch was not syncing, or
+the phone was locked when the automation fired, since Health is unreadable then.
+A null value with a count above 0 means the samples exist but the filter did not
+match them, which is a bug in the generator.
 
 The serialization details, the Health type names, and every trap found while
 building this are in [CLAUDE.md](CLAUDE.md).

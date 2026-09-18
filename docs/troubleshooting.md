@@ -1,8 +1,11 @@
 # Troubleshooting
 
 **Rows arrive but one metric is always null (e.g. sleep).**
-The phone posted and Health returned nothing for that metric. Either the data is
-not in Health for those days, or the label the filter matches on has changed.
+Check `sleep_samples_n` and `heart_rate_samples_n` for that day first: they say
+which of the two cases this is. A count of 0 means Health returned nothing (the
+watch was not syncing, or the phone was locked when the automation fired). A
+count above 0 with a null value means the samples exist but the filter missed
+them, so the label is wrong.
 Run **Sleep Diagnostic** on the phone: it reports sample counts for the `Sleep`
 and `Sleep Analysis` type names, counts for each stage label, and the raw values
 Health returns for last night. Pin whatever it reports in `SLEEP_STAGES` in

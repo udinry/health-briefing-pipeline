@@ -33,6 +33,9 @@ SLEEP_STAGES = [("Deep", "SleepDeep", "sleep_deep"),
                 ("Core", "SleepCore", "sleep_core"),
                 ("Asleep", "SleepUnspec", "sleep_unspecified")]
 
+# Sample counts sent alongside the values: (shortcut variable, metric name).
+DIAG_METRICS = [("SleepN", "sleep_samples_n"), ("HRN", "heart_rate_samples_n")]
+
 # Daily quantity metrics: (Health type, statistic, variable, json name, units)
 DAILY_METRICS = [
     ("Steps",                  "Sum",     "Steps",  "step_count",             "count"),
@@ -264,6 +267,13 @@ def build_sync(ingest_url, days, show_result, name):
     for stage, vname, _ in SLEEP_STAGES:
         b.guarded(b.find_health("Sleep", night() + [str_row("Value", stage)]), "Sum", vname, via_duration=True)
 
+    # Diagnostic counts. A null metric with a count of 0 means Health returned
+    # nothing (watch not syncing, or the phone was locked when the automation
+    # fired); a null metric with a count above 0 means the samples exist but the
+    # filter did not match them, which is a bug here.
+    b.setvar("SleepN", b.count(b.find_health("Sleep", night())))
+    b.setvar("HRN", b.count(b.find_health("Heart Rate", day())))
+
     # Workouts
     wk = b.find_health("Workouts", day())
     g2 = U()
@@ -289,6 +299,7 @@ def build_sync(ingest_url, days, show_result, name):
     metrics = [m(jname, units, ph) for _, _, ph, jname, units in DAILY_METRICS]
     metrics += [m("heart_rate_day_avg", "bpm", "HRDay"), m("heart_rate_sleep_avg", "bpm", "HRNight")]
     metrics += [m(jname, "s", vname) for _, vname, jname in SLEEP_STAGES]
+    metrics += [m(jname, "count", vname) for vname, jname in DIAG_METRICS]
     body = '{"data":{"metrics":[' + ",".join(metrics) + '],"workouts":[WORKOUTS]}}'
 
     mapping = {"STAMP": var("Stamp"), "WORKOUTS": var("Workouts")}
@@ -296,6 +307,8 @@ def build_sync(ingest_url, days, show_result, name):
         mapping[ph] = var(ph)
     mapping["HRDay"], mapping["HRNight"] = var("HRDay"), var("HRNight")
     for _, vname, _ in SLEEP_STAGES:
+        mapping[vname] = var(vname)
+    for vname, _ in DIAG_METRICS:
         mapping[vname] = var(vname)
 
     tu = U()
@@ -318,6 +331,7 @@ def build_sync(ingest_url, days, show_result, name):
                "\nhr day=", var("HRDay"), " night=", var("HRNight"),
                "\nsleep(s) deep=", var("SleepDeep"), " rem=", var("SleepREM"),
                " core=", var("SleepCore"), " unspec=", var("SleepUnspec"),
+               "\nsamples found: sleep=", var("SleepN"), " hr=", var("HRN"),
                "\nserver: ", var("LastResponse"))
     return wrap(b, name)
 
