@@ -15,14 +15,32 @@ Living status. Update it in the same commit as the work it describes.
 
 ## In progress
 
-**Phase 6 — sleep stopped syncing after 15 Sep 2026.** Rows for 16 and 17 Sep
-arrived with steps and active energy but every sleep stage null, so the phone
-posted and the `Sleep` + stage-label filters matched nothing. Two candidate
-causes: Health holds no sleep for those nights (watch not worn or not synced),
-or an iOS update renamed the sleep stage labels. `Sleep Diagnostic` answers this
-on the device: it reports sample counts for `Sleep` and `Sleep Analysis`, counts
-per stage label, and the raw values Health returns for last night. Pin the
-labels in `SLEEP_STAGES` once the answer is known.
+**Phase 6 — sleep stopped syncing after 13 Sep 2026.** A full audit of the
+server on 18 Sep (every metric name, both other tables, the `extra` column)
+found nothing stored under an unexpected label: ten metric names, one source,
+no events. The gap is upstream of the server.
+
+What the per-day table shows:
+
+| Day | steps | kcal | heart rate | sleep |
+|---|---|---|---|---|
+| 09-13 and earlier | yes | yes | yes | yes |
+| 09-14, 09-15 | no row at all | | | |
+| 09-16 | yes | yes | yes | none |
+| 09-17 | yes | yes | none | none |
+
+Steps and active energy come from the iPhone itself; heart rate and sleep come
+from the Pebble watch. Heart rate is matched with no label filter at all, so a
+renamed sleep label cannot explain heart rate disappearing on 09-17. The
+evidence points at the watch not writing to Apple Health rather than at the
+shortcut's filters. `Sleep Diagnostic` distinguishes the two on the device: if
+it reports zero `Sleep` samples over 14 days, the data is not in Health; if it
+reports samples but zero matches per stage label, the labels changed and need
+pinning in `SLEEP_STAGES`.
+
+Also latent: `sleep_unspecified` has never had a value in 22 days, so the
+`Asleep` label has never matched anything. Harmless while the three staged
+labels work, but it should be confirmed by the same diagnostic.
 
 ## Left to do
 
@@ -30,6 +48,9 @@ labels in `SLEEP_STAGES` once the answer is known.
 - Screenshot of a real briefing in the README.
 - Consider a `created_at` column on `metric_samples` so a late sync can be told
   apart from an on-time one.
+- One empty workout row (`id` of `wk-`, every field blank) was stored on an early
+  run: the per-workout loop emitted one all-empty object. Skip workouts with no
+  parseable start in `normalize()`, add a test, and delete the stray row.
 
 ## Principles
 
