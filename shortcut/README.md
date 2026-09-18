@@ -1,44 +1,41 @@
 # Shortcut generator
 
-`gen_shortcut.py` writes two iOS Shortcut files as binary plists:
-
-- **Health Sync** sends yesterday's data (one day per run). Automate it daily.
-- **Health Backfill** is the same body looped over the last 30 days. Run once.
-
-Both read the config file for `MCP_SECRET` and `INGEST_URL`, so the generated files contain your secret. Never commit them; the repo `.gitignore` excludes `*.shortcut`.
-
-## What each run does
-
-For the target day (a cursor that steps back one day per loop iteration):
-
-| Metric sent | Health type | How |
-|---|---|---|
-| `step_count` | Steps | Find Health Samples, grouped by Day, Sum |
-| `active_energy` | Active Calories | grouped by Day, Sum |
-| `resting_heart_rate` | Resting Heart Rate | grouped by Day, Average (empty on devices that don't write it) |
-| `heart_rate_variability` | Heart Rate Variability | grouped by Day, Average (empty on Pebble) |
-| `heart_rate_day_avg` | Heart Rate | samples in the calendar day, Average |
-| `heart_rate_sleep_avg` | Heart Rate | samples 18:00 → 12:00 next day, Average |
-| `sleep_deep` / `sleep_rem` / `sleep_core` / `sleep_unspecified` | Sleep, filtered by Value | Get Details → Duration, Sum (seconds) |
-| workouts | Workouts | one JSON object per workout |
-
-Every calculation is wrapped in an "If Health Samples has any value" guard so a day with no data does not abort the run. The JSON body follows the Health Auto Export shape the server expects, with all numbers as strings.
-
-## Signing
-
-iOS refuses unsigned shortcut files. On a Mac:
+`gen_shortcut.py` writes four iOS Shortcut files as binary plists. None of them
+contains your secret: the three that talk to the server ask for it when they are
+imported on the phone.
 
 ```bash
-shortcuts sign --mode anyone --input "Health Sync v7.shortcut" --output "Health Sync.shortcut"
+cp config.env.example config.env               # INGEST_URL only
+python3 gen_shortcut.py config.env out/
+python3 -m unittest discover -s tests          # 17 structural checks
+shortcuts sign --mode anyone --input "out/Health Sync.shortcut" --output "Health Sync.shortcut"
 ```
 
-## Lessons from reverse-engineering the format
+| File | Purpose |
+|---|---|
+| **Health Sync** | Sends yesterday and the two days before it, silently. Automate this one at 08:30. The three-day window heals any morning the phone was locked. |
+| **Health Check** | One day, and shows the values found plus the server's reply. Run after any change. |
+| **Health Backfill** | 30 days. First setup, or after a long outage. |
+| **Sleep Diagnostic** | Read-only, sends nothing. Reports what sleep data Health holds and which stage labels match. |
 
-Getting these right cost several iterations; they are baked into the generator so you don't repeat them.
+## What a sync run sends
 
-- Health types are addressed by display name in a `Type` filter row: `Steps`, `Active Calories` (not "Active Energy"), `Sleep` (not "Sleep Analysis"), `Heart Rate`, `Resting Heart Rate`, `Heart Rate Variability`, `Workouts`. A wrong name silently returns nothing and iOS never asks for that permission.
-- Sleep stage filters use the string form `{"Values": {"Unit": 4, "String": "Deep"}}` with values `Asleep`, `Core`, `Deep`, `REM`, `In Bed`, `Awake`.
-- Sleep samples carry a text value, so summing the samples fails; sum the `Duration` property instead. Durations come back in seconds.
-- Date ranges use operator `1003` ("is between") with `Date` and `AnotherDate` attachments. Variable magnitudes inside Adjust Date did not resolve, hence the plain-number cursor loop.
-- The health-specific parameter keys are `WFHKSampleFilteringGroupBy`, `WFHKSampleFilteringFillMissing` and `WFHKSampleFilteringUnit`; they are not in the macOS action catalogue but are in its localisation table.
-- Real examples were pulled from iCloud shortcut links via `https://www.icloud.com/shortcuts/api/records/<id>`, which returns a download URL for the raw plist.
+For each day in the window, one JSON body in the Health Auto Export shape, all
+numbers as strings:
+
+| Metric stored | Health type | How |
+|---|---|---|
+| `step_count` | Steps | grouped by Day, Sum |
+| `active_energy` | Active Calories | grouped by Day, Sum |
+| `resting_heart_rate` | Resting Heart Rate | grouped by Day, Average |
+| `heart_rate_variability` | Heart Rate Variability | grouped by Day, Average |
+| `heart_rate_day_avg` | Heart Rate | samples within the calendar day, Average |
+| `heart_rate_sleep_avg` | Heart Rate | samples 18:00 → 12:00 next day, Average |
+| `sleep_deep` / `sleep_rem` / `sleep_core` / `sleep_unspecified` | Sleep, filtered by stage | Get Details → Duration, Sum (seconds) |
+| workouts | Workouts | one JSON object each |
+
+A metric with no samples is sent as an empty string and stored as null, which is
+how the briefing can tell "did not sync" from "zero".
+
+The serialization details, the Health type names, and every trap found while
+building this are in [CLAUDE.md](CLAUDE.md).
