@@ -10,7 +10,7 @@ Living status. Update it in the same commit as the work it describes.
 | 2 | iOS Shortcut ingest: generator, signing, Health type names and sleep durations | Done | `75f7062` |
 | 3 | Telegram bot and daily Claude routine (09:00 IST), analytical prompt on Opus | Done | `75f7062` |
 | 4 | Public repo, README, troubleshooting | Done | `75f7062` |
-| 5 | Resilience: self-healing 3-day sync, secret asked at import, sleep diagnostic, partial-sync reporting, generator tests, project docs | Done | `_PHASE5_` |
+| 5 | Resilience: self-healing 3-day sync, secret asked at import, sleep diagnostic, partial-sync reporting, generator tests, project docs | Done | `188ecbc` |
 | 6 | Confirm on device why sleep stopped matching, then pin the correct labels | In progress | — |
 
 ## In progress
