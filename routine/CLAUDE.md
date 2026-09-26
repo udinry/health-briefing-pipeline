@@ -19,6 +19,9 @@ in a scratch script rather than by eye, then posts to Telegram.
   routine or its run logs can read the bot token. Rotate it there if it leaks.
 - **Partial rows are the normal failure mode**, not empty ones. The prompt has a
   PARTIAL SYNC section: report the gap, never treat a null as a zero.
+- **Workouts carry duration only.** The gym app writes start and end and nothing
+  else, so the prompt forbids inferring effort or calories from a session, and
+  says nothing at all when there are no workouts rather than nagging.
 - **Debug with the API, not the web UI**: `list_runs` then `get_run_log`. A
   healthy run ends with `"ok":true` and a message id, and takes about 3 minutes
   on Opus. A 40-second run means it bailed to the missing-data path.

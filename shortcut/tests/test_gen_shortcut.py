@@ -67,11 +67,47 @@ class SyncShortcut(unittest.TestCase):
             self.assertGreater(opens, 0, "%s missing" % ident)
 
     def test_every_statistic_is_guarded(self):
-        """A day with no samples must not abort the run."""
-        conditionals, _ = flow_balance(self.doc, "is.workflow.actions.conditional")
-        stats = ids(self.doc).count("is.workflow.actions.statistics")
-        self.assertEqual(stats, conditionals,
-                         "%d statistics but %d guards" % (stats, conditionals))
+        """A day with no samples must not abort the run.
+
+        Checks position, not counts: each statistics action has to sit inside an
+        open conditional, whatever else the shortcut happens to branch on.
+        """
+        depth, unguarded, seen = 0, 0, 0
+        for a in self.doc["WFWorkflowActions"]:
+            ident = a["WFWorkflowActionIdentifier"]
+            if ident == "is.workflow.actions.conditional":
+                mode = a["WFWorkflowActionParameters"].get("WFControlFlowMode")
+                depth += 1 if mode == 0 else (-1 if mode == 2 else 0)
+            elif ident == "is.workflow.actions.statistics":
+                seen += 1
+                unguarded += depth < 1
+        self.assertGreater(seen, 0, "no statistics actions at all")
+        self.assertEqual(unguarded, 0, "%d of %d statistics are outside a guard" % (unguarded, seen))
+
+    def test_the_workouts_loop_is_guarded(self):
+        """A repeat over an empty list once emitted one all-empty workout."""
+        depth = 0
+        for a in self.doc["WFWorkflowActions"]:
+            ident = a["WFWorkflowActionIdentifier"]
+            if ident == "is.workflow.actions.conditional":
+                mode = a["WFWorkflowActionParameters"].get("WFControlFlowMode")
+                depth += 1 if mode == 0 else (-1 if mode == 2 else 0)
+            elif ident == "is.workflow.actions.repeat.each":
+                if a["WFWorkflowActionParameters"].get("WFControlFlowMode") == 0:
+                    self.assertGreaterEqual(depth, 1, "the workouts loop is not guarded")
+
+    def test_workouts_send_only_fields_the_server_reads(self):
+        """Energy and distance are omitted, not zeroed, when Health has none."""
+        texts = [a["WFWorkflowActionParameters"]["WFTextActionText"]["Value"]["string"]
+                 for a in self.doc["WFWorkflowActions"]
+                 if a["WFWorkflowActionIdentifier"].endswith("gettext")
+                 and isinstance(a["WFWorkflowActionParameters"].get("WFTextActionText"), dict)]
+        wk = [t for t in texts if t.startswith('{"id":"wk-')]
+        self.assertEqual(len(wk), 1)
+        for field in ('"id"', '"name"', '"start"', '"end"'):
+            self.assertIn(field, wk[0])
+        for absent in ("activeEnergyBurned", "distance", "duration"):
+            self.assertNotIn(absent, wk[0])
 
     def test_variables_are_set_before_use(self):
         assigned, seen_first_use = set(), {}
@@ -179,6 +215,31 @@ class SleepDiagnostic(unittest.TestCase):
                  if a["WFWorkflowActionIdentifier"].endswith("properties.health.quantity")]
         self.assertIn("Value", props)
         self.assertIn("is.workflow.actions.showresult", ids(self.doc))
+
+
+class WorkoutsDiagnostic(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = G.build_workouts_diagnostic("Workouts Diagnostic")
+
+    def test_is_read_only(self):
+        self.assertNotIn("is.workflow.actions.downloadurl", ids(self.doc))
+        self.assertEqual(self.doc["WFWorkflowImportQuestions"], [])
+
+    def test_probes_both_type_spellings(self):
+        types = [r["Values"]["Enumeration"]["Value"]
+                 for _, rows in filter_rows(self.doc) for r in rows if r["Property"] == "Type"]
+        self.assertIn("Workouts", types)
+        self.assertIn("Workout", types)
+
+    def test_reads_each_property_group_into_its_own_box(self):
+        """An invalid property name late in the list must not hide earlier results."""
+        boxes = ids(self.doc).count("is.workflow.actions.showresult")
+        self.assertEqual(boxes, 1 + len(G.WORKOUT_PROP_GROUPS))
+        props = [a["WFWorkflowActionParameters"]["WFContentItemPropertyName"]
+                 for a in self.doc["WFWorkflowActions"]
+                 if a["WFWorkflowActionIdentifier"].endswith("properties.health.quantity")]
+        self.assertEqual(props, [p for group in G.WORKOUT_PROP_GROUPS for p in group])
 
 
 class Serialization(unittest.TestCase):

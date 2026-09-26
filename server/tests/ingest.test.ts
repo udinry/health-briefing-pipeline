@@ -112,3 +112,57 @@ d2("num() string tolerance (local patch)", () => {
     e2(r.metricRows.map((m) => m.qty)).toEqual(["7359", "1234", "58.4", "1234.5", null, "245", "58.4"]);
   });
 });
+
+// Local patch: workouts without a usable start are dropped, and duration falls
+// back to the timestamps when the payload's duration is not a bare number.
+import { describe as d3, it as it3, expect as e3 } from "vitest";
+
+function payload(workouts: unknown[]) {
+  return {
+    data: {
+      metrics: [], workouts, ecg: [], stateOfMind: [], symptoms: [],
+      medications: [], cycleTracking: [], heartRateNotifications: [],
+    },
+  } as never;
+}
+
+d3("workout normalization (local patch)", () => {
+  it3("drops a workout with no parseable start and counts it as skipped", () => {
+    const r = normalize(payload([
+      { id: "wk-", name: "", start: "", end: "", source: "Shortcuts" },
+      { id: "wk-real", name: "Traditional Strength Training",
+        start: "2026-09-26 07:00:00 +0530", end: "2026-09-26 07:45:00 +0530" },
+    ]));
+    e3(r.workoutRows.map((w) => w.id)).toEqual(["wk-real"]);
+    e3(r.skipped).toBe(1);
+  });
+
+  it3("derives duration in seconds from start and end", () => {
+    const r = normalize(payload([
+      { id: "a", start: "2026-09-26 07:00:00 +0530", end: "2026-09-26 07:45:00 +0530" },
+    ]));
+    e3(r.workoutRows[0].durationS).toBe("2700");
+  });
+
+  it3("prefers a bare numeric duration but ignores a localized measurement", () => {
+    const [numeric] = normalize(payload([
+      { id: "a", duration: 1800, start: "2026-09-26 07:00:00 +0530", end: "2026-09-26 07:45:00 +0530" },
+    ])).workoutRows;
+    e3(numeric.durationS).toBe("1800");
+
+    const [measured] = normalize(payload([
+      { id: "b", duration: "45 min", start: "2026-09-26 07:00:00 +0530", end: "2026-09-26 07:45:00 +0530" },
+    ])).workoutRows;
+    e3(measured.durationS).toBe("2700");
+  });
+
+  it3("leaves energy and distance absent when Health did not provide them", () => {
+    const [w] = normalize(payload([
+      { id: "a", name: "Traditional Strength Training",
+        start: "2026-09-26 07:00:00 +0530", end: "2026-09-26 07:45:00 +0530" },
+    ])).workoutRows;
+    e3(w.activeEnergy).toBeNull();
+    e3(w.distance).toBeNull();
+    e3(w.avgHr).toBeNull();
+  });
+});

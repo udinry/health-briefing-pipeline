@@ -11,6 +11,14 @@ and `Sleep Analysis` type names, counts for each stage label, and the raw values
 Health returns for last night. Pin whatever it reports in `SLEEP_STAGES` in
 `shortcut/gen_shortcut.py`, regenerate and re-sign.
 
+**Workouts never appear in the briefing.**
+Run Workouts Diagnostic. Its first box counts workouts over 14 and 30 days under
+both type spellings: if all three counts are 0, Health holds no workouts for that
+window, and the gym app's "save to Health" permission is the thing to check. The
+later boxes show which property names return values; pin those in the generator
+before adding a field to the sync. A workout stored with a null `duration_s`
+means neither a numeric duration nor a usable end time arrived.
+
 **A whole day is missing, no row at all.**
 The shortcut did not run, or it failed before the POST. The usual cause is the
 phone being locked when the automation fired: Apple Health is unreadable while

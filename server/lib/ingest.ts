@@ -101,6 +101,20 @@ function workoutUnits(v: unknown): string | null {
   return typeof u === "string" ? u : null;
 }
 
+// Workout duration. HAE sends seconds as a number, but iOS Shortcuts renders a
+// duration as a localized measurement ("45 min"), and the lenient num() above
+// would read that as 45 seconds. So trust only a bare number, and otherwise
+// derive the duration from the timestamps, which are unambiguous.
+function durationSeconds(raw: unknown, start: Date | null, end: Date | null): string | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+  if (typeof raw === "string" && /^\s*-?\d+(\.\d+)?\s*$/.test(raw.trim())) return String(Number(raw));
+  if (start && end) {
+    const seconds = Math.round((end.getTime() - start.getTime()) / 1000);
+    return seconds >= 0 ? String(seconds) : null;
+  }
+  return null;
+}
+
 function safeDate(s: unknown): Date | null {
   if (typeof s !== "string") return null;
   try {
@@ -141,12 +155,21 @@ export function normalize(payload: HaePayload): NormalizeResult {
   }
 
   for (const w of payload.data.workouts as Record<string, any>[]) {
+    const start = safeDate(w.start);
+    const end = safeDate(w.end);
+    // A workout with no usable start is not a workout. A Shortcuts repeat loop
+    // over an empty list can emit one all-empty object, and storing that leaves a
+    // blank row that reads like a real session.
+    if (!start) {
+      skipped++;
+      continue;
+    }
     workoutRows.push({
       id: w.id,
       name: w.name ?? null,
-      start: safeDate(w.start),
-      end: safeDate(w.end),
-      durationS: num(w.duration),
+      start,
+      end,
+      durationS: durationSeconds(w.duration, start, end),
       activeEnergy: workoutQty(w.activeEnergyBurned),
       activeEnergyUnits: workoutUnits(w.activeEnergyBurned),
       distance: workoutQty(w.distance),

@@ -16,6 +16,7 @@ python3 -m unittest discover -s tests          # 17 structural tests
 | Health Check | 1 day, shows values found and the server's reply. Use after any change. |
 | Health Backfill | 30 days. First setup, or after a long outage. |
 | Sleep Diagnostic | Read-only. Reports what sleep data Health actually holds. |
+| Workouts Diagnostic | Read-only. Reports whether Health returns workouts, and under which property names. |
 
 ## Gotchas, all of them found the hard way
 
@@ -44,6 +45,13 @@ python3 -m unittest discover -s tests          # 17 structural tests
   at that moment. This is the most likely cause of a morning with no row at all.
 - **Re-importing a shortcut with the same name keeps the old one too.** Delete
   the old one first or iOS will keep running it.
+- **The workouts loop is guarded by an "has any value" check.** Without it a
+  repeat over an empty list emitted one all-empty object, which the server stored
+  as a blank workout row. The generator tests assert the guard is there.
+- **Workout property names are unverified** beyond Start Date, End Date and
+  Name, which is why Workouts Diagnostic reads each candidate group into its own
+  result box: an invalid name late in the list cannot hide the valid ones. Pin
+  what it reports before adding a field to the sync.
 - **Every run records how many samples Health returned** (`sleep_samples_n`,
   `heart_rate_samples_n`). Without those, a null value is ambiguous between "no
   data on the phone" and "the filter matched nothing", and answering that

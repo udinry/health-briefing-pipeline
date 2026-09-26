@@ -11,44 +11,43 @@ Living status. Update it in the same commit as the work it describes.
 | 3 | Telegram bot and daily Claude routine (09:00 IST), analytical prompt on Opus | Done | `75f7062` |
 | 4 | Public repo, README, troubleshooting | Done | `75f7062` |
 | 5 | Resilience: self-healing 3-day sync, secret asked at import, sleep diagnostic, partial-sync reporting, generator tests, project docs | Done | `188ecbc` |
-| 6 | Confirm on device why sleep stopped matching, then pin the correct labels | In progress | — |
+| 6 | Confirm on device why sleep stopped matching, then pin the correct labels | Resolved by itself | — |
+| 7 | Workouts: guard the loop, drop blank rows, derive duration, put gym sessions in the briefing | Done | `_P7_` |
 | 6a | Record sample counts with every sync so a null value is self-explaining | Done | `32af353` |
 
 ## In progress
 
-**Phase 6 — sleep stopped syncing after 13 Sep 2026.** A full audit of the
-server on 18 Sep (every metric name, both other tables, the `extra` column)
-found nothing stored under an unexpected label: ten metric names, one source,
-no events. The gap is upstream of the server.
+**Phase 7 — workouts, handed over from the Milo session.** Milo (the user's gym
+log) now writes each finished session to Apple Health with a start and an end and
+nothing else, and those sessions should appear in the briefing. The workouts path
+had never worked: the table held exactly one row, `wk-` with every field blank.
 
-What the per-day table shows:
+Fixed and shipped:
 
-| Day | steps | kcal | heart rate | sleep |
-|---|---|---|---|---|
-| 09-13 and earlier | yes | yes | yes | yes |
-| 09-14, 09-15 | no row at all | | | |
-| 09-16 | yes | yes | yes | none |
-| 09-17 | yes | yes | none | none |
+- The Shortcuts workouts loop is guarded, so an empty list emits nothing. The
+  blank row came from a repeat over an empty list emitting one all-empty object.
+- `normalize()` drops any workout with no parseable start and counts it as
+  skipped, so a blank object can never be stored again.
+- Duration is derived from start and end unless the payload carries a bare
+  number. Shortcuts renders a duration as a localized measurement ("45 min"),
+  which the lenient `num()` would have read as 45 seconds.
+- The sync sends only id, name, start and end. Energy, distance and heart rate
+  are omitted rather than zeroed, because Milo records none of them.
+- The stray `wk-` row was deleted from production.
+- The briefing has a WORKOUTS section: sessions listed with name, start time and
+  minutes; weekly count and total minutes in Trends; no inference of effort or
+  calories; silence when there are no workouts rather than nagging.
 
-Steps and active energy come from the iPhone itself; heart rate and sleep come
-from the Pebble watch. Heart rate is matched with no label filter at all, so a
-renamed sleep label cannot explain heart rate disappearing on 09-17. The
-evidence points at the watch not writing to Apple Health rather than at the
-shortcut's filters. `Sleep Diagnostic` distinguishes the two on the device: if
-it reports zero `Sleep` samples over 14 days, the data is not in Health; if it
-reports samples but zero matches per stage label, the labels changed and need
-pinning in `SLEEP_STAGES`.
+**Still unverified: no real workout has ever reached the server.** The workout
+property names beyond Start Date, End Date and Name are unproven, which is what
+`Workouts Diagnostic` exists to settle. Do not claim workouts export until a row
+with a real start, end and duration has been seen on the server.
 
-The user reports that Apple Health does hold values for the days in question,
-which points away from the watch and towards the query returning nothing at run
-time (a locked phone being the likeliest reason, since Health is unreadable
-then). Every sync now posts `sleep_samples_n` and `heart_rate_samples_n`, so
-from the next run the server itself records which case applies and no further
-round trip through the phone is needed.
-
-Also latent: `sleep_unspecified` has never had a value in 22 days, so the
-`Asleep` label has never matched anything. Harmless while the three staged
-labels work, but it should be confirmed by the same diagnostic.
+**Phase 6 closed itself.** Sleep and heart rate returned on 23 and 24 Sep without
+any change to the filters, which fits the watch or a locked phone rather than
+renamed labels. The `_samples_n` counts added in 6a will name the cause if it
+recurs. Note the sync is still running only about 5 days in 14, and the counts
+have never arrived, so the newest shortcuts have not been imported yet.
 
 ## Left to do
 
@@ -56,9 +55,8 @@ labels work, but it should be confirmed by the same diagnostic.
 - Screenshot of a real briefing in the README.
 - Consider a `created_at` column on `metric_samples` so a late sync can be told
   apart from an on-time one.
-- One empty workout row (`id` of `wk-`, every field blank) was stored on an early
-  run: the per-workout loop emitted one all-empty object. Skip workouts with no
-  parseable start in `normalize()`, add a test, and delete the stray row.
+- Pin the workout property names once Workouts Diagnostic reports them, and add
+  any that Milo fills (it currently fills none beyond name and the timestamps).
 
 ## Principles
 

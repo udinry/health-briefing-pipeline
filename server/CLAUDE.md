@@ -30,5 +30,19 @@ Postgres via Drizzle, a stateless OAuth 2.1 layer so claude.ai can connect.
 - **Idempotency comes from the unique index** on (metric_name, date, source).
   That is what makes re-sending the same day safe, and the 3-day sync window
   possible.
+- **A workout with no parseable start is dropped**, and counted in `skipped`. A
+  Shortcuts repeat over an empty list once emitted a single all-empty object,
+  which was stored as a blank workout row that read like a real session.
+- **Workout duration is derived from the timestamps** unless the payload carries
+  a bare number. Shortcuts renders a duration as a localized measurement
+  ("45 min"), and the lenient `num()` would read that as 45 seconds.
+- **Energy, distance and heart rate stay absent** when Health has none. The gym
+  app records duration only, so a zero there would be invented data.
 - `MCP_SECRET` is both the ingest bearer token and the OAuth login. Treat it
   like a password.
+- **Tests set a 60s timeout** in `vitest.config.ts`. PGlite boots a Postgres wasm
+  build per suite, and the 5s default fails under load in a way that reads like a
+  broken test.
+- **Deploying:** `server/.vercel` (gitignored) links this directory to the
+  existing Vercel project, so `npx vercel deploy --prod` from here updates
+  production rather than creating a second project.

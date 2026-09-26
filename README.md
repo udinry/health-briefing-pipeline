@@ -104,7 +104,13 @@ and any workouts.
 
 **Sleep Diagnostic** is read-only and sends nothing. Run it when sleep numbers
 look wrong: it reports how many sleep samples Health holds, which stage labels
-match, and the raw values Health returns for last night.
+match, and the raw values Health returns for last night. **Workouts Diagnostic**
+does the same for gym sessions.
+
+Workouts are exported with their name, start and end. Duration is computed from
+the timestamps; calories, distance and heart rate are left out unless Health
+actually has them, so a session logged by an app that records only duration is
+never dressed up with invented numbers.
 
 See [shortcut/CLAUDE.md](shortcut/CLAUDE.md) for the serialization details and
 every trap found while building this.

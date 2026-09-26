@@ -19,6 +19,8 @@ Files produced:
     Health Check       1 day, shows the values found and the server's reply.
     Health Backfill    30 days, for first setup or after a long outage.
     Sleep Diagnostic   read-only; reports what sleep data Health actually holds.
+    Workouts Diagnostic  read-only; reports whether Health returns workouts and
+                       under which property names.
 """
 
 import plistlib, uuid, sys, os, re
@@ -274,22 +276,30 @@ def build_sync(ingest_url, days, show_result, name):
     b.setvar("SleepN", b.count(b.find_health("Sleep", night())))
     b.setvar("HRN", b.count(b.find_health("Heart Rate", day())))
 
-    # Workouts
+    # Workouts. The loop is guarded: a repeat over an empty list once emitted a
+    # single all-empty object, which the server stored as a blank workout row.
+    # Only start, end and name are sent. Shortcuts renders a duration as a
+    # localized measurement ("45 min"), so the server derives the duration from
+    # the two timestamps instead, and energy and distance are left out entirely
+    # rather than sent as zero when Health has none.
+    b.setvar("Workouts", b.text(""))
     wk = b.find_health("Workouts", day())
+    gw = U()
+    b.A("conditional", {"WFControlFlowMode": 0, "GroupingIdentifier": gw, "WFCondition": 100,
+                        "WFInput": {"Type": "Variable", "Variable": att(wk)}})
     g2 = U()
     b.A("repeat.each", {"WFControlFlowMode": 0, "GroupingIdentifier": g2, "WFInput": att(wk)})
     ws, we = b.fmt_date(var("Repeat Item", "Start Date")), b.fmt_date(var("Repeat Item", "End Date"))
     b.A("gettext", {"WFTextActionText": tokjson(
-        '{"id":"wk-START","name":"TYPE","start":"START","end":"END","value":"VALUE",'
-        '"duration_text":"DUR","source":"Shortcuts"}',
-        {"START": ws, "END": we, "TYPE": var("Repeat Item", "Name"),
-         "VALUE": var("Repeat Item", "Value"), "DUR": var("Repeat Item", "Duration")})}, U())
+        '{"id":"wk-START","name":"NAME","start":"START","end":"END","source":"Shortcuts"}',
+        {"START": ws, "END": we, "NAME": var("Repeat Item", "Name")})}, U())
     end2 = U()
     b.A("repeat.each", {"WFControlFlowMode": 2, "GroupingIdentifier": g2}, end2)
     cu = U()
     b.A("text.combine", {"text": att(out(end2, "Repeat Results")),
                          "WFTextSeparator": "Custom", "WFTextCustomSeparator": ","}, cu)
     b.setvar("Workouts", out(cu, "Combined Text"))
+    b.A("conditional", {"WFControlFlowMode": 2, "GroupingIdentifier": gw}, U())
 
     # Body: Health Auto Export shape, every number as a string.
     def m(jname, units, placeholder):
@@ -387,6 +397,54 @@ def build_sleep_diagnostic(name):
     return wrap(b, name)
 
 
+# Candidate property names for a workout sample, grouped so that an invalid name
+# later in the list cannot hide the results of the valid ones: each group is
+# shown in its own box before the next group is read.
+WORKOUT_PROP_GROUPS = [
+    ["Name", "Start Date", "End Date"],
+    ["Duration", "Type", "Value"],
+    ["Source", "Distance", "Active Energy"],
+]
+
+
+def build_workouts_diagnostic(name):
+    """Read-only. Reports whether Health returns workouts, and under which
+    property names, so the sync can be pinned to names that actually exist."""
+    b = Builder()
+
+    b.setvar("Now", b.date_now())
+    b.setvar("Fortnight", b.adjust(var("Now"), "Subtract", "14", "days"))
+    b.setvar("Month", b.adjust(var("Now"), "Subtract", "30", "days"))
+
+    recent = [between_row("Start Date", var("Fortnight"), var("Now"))]
+    month = [between_row("Start Date", var("Month"), var("Now"))]
+
+    # Both spellings, so a renamed type shows up as a count rather than silence.
+    b.setvar("N14", b.count(b.find_health("Workouts", recent)))
+    b.setvar("N30", b.count(b.find_health("Workouts", month)))
+    b.setvar("NSingular", b.count(b.find_health("Workout", month)))
+    b.show("WORKOUTS DIAGNOSTIC\n",
+           "type 'Workouts' 14d: ", var("N14"), "\n",
+           "type 'Workouts' 30d: ", var("N30"), "\n",
+           "type 'Workout' 30d: ", var("NSingular"), "\n",
+           "If all three are 0, Health has no workouts in that window.")
+
+    found = b.find_health("Workouts", month)
+    for i, group in enumerate(WORKOUT_PROP_GROUPS, start=1):
+        lines = []
+        for prop in group:
+            vals = b.details(found, prop)
+            cu = U()
+            b.A("text.combine", {"text": att(vals), "WFTextSeparator": "Custom",
+                                 "WFTextCustomSeparator": " | "}, cu)
+            vname = "P%d%s" % (i, prop.replace(" ", ""))
+            b.setvar(vname, out(cu, "Combined Text"))
+            lines += [prop, ": ", var(vname), "\n"]
+        b.show("PROPERTY GROUP %d of %d\n" % (i, len(WORKOUT_PROP_GROUPS)), *lines)
+
+    return wrap(b, name)
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
@@ -402,6 +460,7 @@ def main():
         "Health Check": build_sync(ingest, 1, True, "Health Check"),
         "Health Backfill": build_sync(ingest, 30, True, "Health Backfill"),
         "Sleep Diagnostic": build_sleep_diagnostic("Sleep Diagnostic"),
+        "Workouts Diagnostic": build_workouts_diagnostic("Workouts Diagnostic"),
     }
     for name, doc in files.items():
         path = os.path.join(outdir, name + ".shortcut")
