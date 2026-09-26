@@ -12,7 +12,7 @@ Living status. Update it in the same commit as the work it describes.
 | 4 | Public repo, README, troubleshooting | Done | `75f7062` |
 | 5 | Resilience: self-healing 3-day sync, secret asked at import, sleep diagnostic, partial-sync reporting, generator tests, project docs | Done | `188ecbc` |
 | 6 | Confirm on device why sleep stopped matching, then pin the correct labels | Resolved by itself | — |
-| 7 | Workouts: guard the loop, drop blank rows, derive duration, put gym sessions in the briefing | Done | `_P7_` |
+| 7 | Workouts: guard the loop, drop blank rows, derive duration, put gym sessions in the briefing | Done | `54643e0` |
 | 6a | Record sample counts with every sync so a null value is self-explaining | Done | `32af353` |
 
 ## In progress
